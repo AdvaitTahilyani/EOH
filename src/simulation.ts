@@ -10,7 +10,9 @@ import {
   type SimulationResult
 } from "./types";
 
-const HEAT_LIMIT = 9;
+const HEAT_WARNING = 5;
+const HEAT_DANGER = 7;
+const HEAT_LIMIT = 8;
 const directions = [
   [1, 0],
   [-1, 0],
@@ -75,16 +77,58 @@ function signalDistances(board: PieceType[][]) {
 function computeHeat(board: PieceType[][]) {
   return createMatrix<number>((row, col) => {
     const piece = board[row][col];
-    if (piece === "empty") {
+    if (piece === "empty" || piece === "blocker") {
       return 0;
     }
 
-    let heat = piece === "power" ? 5 : piece === "switch" ? 4 : piece === "wire" ? 3 : 1;
-    let crowding = 0;
-    let cooling = piece === "spacing" ? 2 : 0;
+    const baseHeat = piece === "power" ? 2 : piece === "switch" ? 1 : piece === "wire" ? 1 : piece === "hotspot" ? 4 : 0;
 
-    for (let dy = -1; dy <= 1; dy += 1) {
-      for (let dx = -1; dx <= 1; dx += 1) {
+    let adjacentConductive = 0;
+    let nearbySpacing = piece === "spacing" ? 1 : 0;
+    let nearbyHeatsinks = piece === "heatsink" ? 1 : 0;
+    let nearbyHotspots = piece === "hotspot" ? 1 : 0;
+
+    for (const [dy, dx] of directions) {
+      const nextRow = row + dy;
+      const nextCol = col + dx;
+      if (!inBounds(nextRow, nextCol)) {
+        continue;
+      }
+      const neighbor = board[nextRow][nextCol];
+      if (isConductive(neighbor)) {
+        adjacentConductive += 1;
+      }
+      if (neighbor === "spacing") {
+        nearbySpacing += 1;
+      }
+      if (neighbor === "heatsink") {
+        nearbyHeatsinks += 1;
+      }
+      if (neighbor === "hotspot") {
+        nearbyHotspots += 1;
+      }
+    }
+
+    let diagonalSpacing = 0;
+    for (const [dy, dx] of [
+      [-1, -1],
+      [-1, 1],
+      [1, -1],
+      [1, 1]
+    ] as const) {
+      const nextRow = row + dy;
+      const nextCol = col + dx;
+      if (!inBounds(nextRow, nextCol)) {
+        continue;
+      }
+      if (board[nextRow][nextCol] === "spacing") {
+        diagonalSpacing += 1;
+      }
+    }
+
+    let localConductive = 0;
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
         if (dy === 0 && dx === 0) {
           continue;
         }
@@ -93,17 +137,28 @@ function computeHeat(board: PieceType[][]) {
         if (!inBounds(nextRow, nextCol)) {
           continue;
         }
-        const neighbor = board[nextRow][nextCol];
-        if (neighbor !== "empty" && neighbor !== "spacing") {
-          crowding += 1;
-        }
-        if (neighbor === "spacing") {
-          cooling += 1;
+        if (isConductive(board[nextRow][nextCol])) {
+          localConductive += 1;
         }
       }
     }
 
-    return Math.max(0, heat + crowding - cooling);
+    const crowdHeat = Math.max(0, adjacentConductive - 2) * 2;
+    const junctionHeat =
+      piece === "wire"
+        ? adjacentConductive >= 4
+          ? 3
+          : adjacentConductive === 3
+            ? 2
+            : 0
+        : piece === "power"
+          ? Math.max(0, adjacentConductive - 2)
+          : 0;
+    const busHeat = Math.max(0, localConductive - 6);
+    const hotspotHeat = piece === "hotspot" ? 1 : nearbyHotspots * 2;
+    const cooling = nearbySpacing * 2 + nearbyHeatsinks * 4 + diagonalSpacing;
+
+    return Math.max(0, baseHeat + crowdHeat + junctionHeat + busHeat + hotspotHeat - cooling);
   });
 }
 
@@ -139,7 +194,7 @@ export function analyzeBoard(cells: Cell[]): PreviewAnalysis {
     }
   }
 
-  const heatPenalty = Math.max(0, maxHeat - 5) * 8 + crowdedCells * 5;
+  const heatPenalty = Math.max(0, maxHeat - 4) * 10 + crowdedCells * 6;
   const unpoweredPenalty = Math.max(0, switchCount - poweredSwitches) * 18;
   const stability = Math.max(0, 100 - heatPenalty - unpoweredPenalty);
 
@@ -204,14 +259,14 @@ export function simulateBoard(cells: Cell[]): SimulationResult {
       .map((cell) => ({ row: cell.row, col: cell.col }));
 
     const hotCells = cells
-      .filter((cell) => analysis.heatMap[cell.row][cell.col] >= 6)
+      .filter((cell) => analysis.heatMap[cell.row][cell.col] >= HEAT_WARNING)
       .map((cell) => ({ row: cell.row, col: cell.col, heat: analysis.heatMap[cell.row][cell.col] }));
 
     const frameFailures = failures.filter((failure) => {
       if (failure.reason === "No signal") {
         return step >= maxDistance;
       }
-      return analysis.heatMap[failure.row][failure.col] - 6 <= step;
+      return analysis.heatMap[failure.row][failure.col] - HEAT_WARNING <= step;
     });
 
     frames.push({

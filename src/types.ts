@@ -1,13 +1,14 @@
 export const GRID_ROWS = 7;
 export const GRID_COLS = 7;
 
-export type PieceType = "empty" | "switch" | "wire" | "power" | "spacing";
+export type PieceType = "empty" | "switch" | "wire" | "power" | "spacing" | "heatsink" | "blocker" | "hotspot";
 export type Phase = "design" | "running" | "results";
 
 export interface Cell {
   row: number;
   col: number;
   piece: PieceType;
+  locked?: boolean;
 }
 
 export interface CellAnalysis {
@@ -53,6 +54,23 @@ export interface SimulationResult {
   failures: FailureEvent[];
   score: ScoreBreakdown;
   succeeded: boolean;
+}
+
+export interface ArcadeLevelGoal {
+  poweredSwitches: number;
+  maxHeat: number;
+  maxParts: number;
+}
+
+export interface ArcadeLevel {
+  id: number;
+  name: string;
+  tagline: string;
+  description: string;
+  instructions: string;
+  tips: string[];
+  goal: ArcadeLevelGoal;
+  presetCells: Cell[];
 }
 
 export interface LeaderboardEntry {

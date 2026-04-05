@@ -26,6 +26,16 @@ test("analysis counts powered switches through connected wires", () => {
   assert.equal(analysis.poweredSwitches, 1);
 });
 
+test("small layouts stay cool", () => {
+  const board = emptyBoard();
+  board.find((cell) => cell.row === 3 && cell.col === 2)!.piece = "power";
+  board.find((cell) => cell.row === 3 && cell.col === 3)!.piece = "wire";
+
+  const analysis = analyzeBoard(board);
+
+  assert.ok(analysis.maxHeat < 5);
+});
+
 test("simulation reports failures for disconnected switches", () => {
   const board = emptyBoard();
   board.find((cell) => cell.row === 0 && cell.col === 0)!.piece = "power";
@@ -53,4 +63,22 @@ test("spacing reduces overheating in dense areas", () => {
   const coolResult = analyzeBoard(cooled);
 
   assert.ok(coolResult.maxHeat <= hotResult.maxHeat);
+  assert.ok(coolResult.stability >= hotResult.stability);
+});
+
+test("dense wire clusters trigger heat pressure", () => {
+  const board = emptyBoard();
+  board.find((cell) => cell.row === 1 && cell.col === 3)!.piece = "power";
+
+  for (const [row, col] of [
+    [0, 1], [0, 2], [0, 3], [0, 4], [0, 5],
+    [1, 1], [1, 2], [1, 4], [1, 5],
+    [2, 1], [2, 2], [2, 3], [2, 4], [2, 5]
+  ]) {
+    board.find((cell) => cell.row === row && cell.col === col)!.piece = "wire";
+  }
+
+  const analysis = analyzeBoard(board);
+
+  assert.ok(analysis.maxHeat >= 5);
 });

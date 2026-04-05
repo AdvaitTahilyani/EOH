@@ -6,6 +6,7 @@ import express from "express";
 const app = express();
 const dataDir = path.resolve(process.cwd(), "data");
 const dbPath = path.join(dataDir, "leaderboard.db");
+const clientDistDir = path.resolve(process.cwd(), "dist");
 
 fs.mkdirSync(dataDir, { recursive: true });
 
@@ -66,6 +67,14 @@ app.post("/api/scores", (request, response) => {
 
   response.status(201).json(topScores());
 });
+
+if (fs.existsSync(clientDistDir)) {
+  app.use(express.static(clientDistDir));
+
+  app.get(/^\/(?!api).*/, (_request, response) => {
+    response.sendFile(path.join(clientDistDir, "index.html"));
+  });
+}
 
 const port = Number(process.env.PORT ?? 8787);
 app.listen(port, () => {

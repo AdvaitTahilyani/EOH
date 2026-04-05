@@ -3,11 +3,12 @@ import { create } from "zustand";
 import { analyzeBoard, simulateBoard } from "./simulation";
 import { GRID_COLS, GRID_ROWS, type Cell, type LeaderboardEntry, type Phase, type PieceType, type SimulationResult } from "./types";
 
-function createInitialCells() {
+function createInitialCells(presetCells: Cell[] = []) {
   const cells: Cell[] = [];
   for (let row = 0; row < GRID_ROWS; row += 1) {
     for (let col = 0; col < GRID_COLS; col += 1) {
-      cells.push({ row, col, piece: "empty" });
+      const preset = presetCells.find((cell) => cell.row === row && cell.col === col);
+      cells.push(preset ? { ...preset } : { row, col, piece: "empty" });
     }
   }
   return cells;
@@ -23,7 +24,7 @@ interface ExhibitState {
   playerName: string;
   setActivePiece: (piece: PieceType) => void;
   placePiece: (row: number, col: number, piece?: PieceType) => void;
-  clearBoard: () => void;
+  clearBoard: (presetCells?: Cell[]) => void;
   runSimulation: () => SimulationResult;
   setCurrentFrame: (frame: number) => void;
   finishRun: () => void;
@@ -43,12 +44,12 @@ export const useExhibitStore = create<ExhibitState>((set, get) => ({
   placePiece: (row, col, piece) =>
     set((state) => ({
       cells: state.cells.map((cell) =>
-        cell.row === row && cell.col === col ? { ...cell, piece: piece ?? state.activePiece } : cell
+        cell.row === row && cell.col === col && !cell.locked ? { ...cell, piece: piece ?? state.activePiece } : cell
       )
     })),
-  clearBoard: () =>
+  clearBoard: (presetCells = []) =>
     set({
-      cells: createInitialCells(),
+      cells: createInitialCells(presetCells),
       phase: "design",
       currentFrame: 0,
       latestRun: null
